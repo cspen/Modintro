@@ -4,6 +4,7 @@
 require_once '../utilities/tools.php';
 require_once '../utilities/appSettings.php';
 require_once '../classes/User.php';
+require_once '../classes/Announcement.php';
 
 // Check if Content-Type  and character set requested by
 // client are available
@@ -26,9 +27,9 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 	/* URL:	/announcements/ */
 	
 	if($HTTPVerb === "DELETE") {
-		deleteAnnouncement();
+		deleteAnnouncements();
 	} elseif($HTTPVerb === "GET" || $HTTPVerb === "HEAD") {
-		getAnnouncement($HTTPVerb);
+		getAnnouncements($HTTPVerb);
 	} elseif($HTTPVerb === "OPTIONS") {
 		header("HTTP/1.1 200 OK");
 		header("Allow: DELETE, GET, HEAD, POST, PUT");
@@ -36,7 +37,7 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 	} elseif($HTTPverb === "POST") {
 		postAnnouncement();
 	} elseif($HTTPVerb === "PUT") {
-		putAnnouncement();
+		putAnnouncements();
 	} else {
 		header("HTTP/1.1 405 Method Not Allowed");
 		header("Allow:  DELETE, GET, HEAD, OPTIONS, POST, PUT");
@@ -65,7 +66,7 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 }
 
 /* URL: /announcements/ */
-function deleteAccouncements() {
+function deleteAnnouncements() {
 	$dbconn = getDatabaseConnection();
 	$user = authenticateUser($dbconn);
 	
@@ -326,7 +327,7 @@ function deleteAnnouncement($announcementId) {
 		
 		if($stmt->execute()) {
 			$rowCount = $stmt->rowCount();
-			if($rowCount == 1) {
+			if($rowCount == 1) { 
 				$result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 				processConditionalHeaders($result['etag'], $rowCount, $result['last_modified']);
 				
@@ -365,59 +366,31 @@ function getAnnouncement($verb, $announcementId) {
 	$query = "SELECT * FROM announcement WHERE announcementID=:announcementID";
 	
 	$dbconn = getDatabaseConnection();	
-	$stmt = $dbconn->prepare();
+	$stmt = $dbconn->prepare($query);
 	$stmt->bindParam(':announcementID', $announcementId);
 	if($stmt->execute()) {
-		$rowCount = $stmt->rowCount();		
+		$rowCount = $stmt->rowCount();
+		if($rowCount == 1) {
+			$result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+			$result = $result[0];
+			processConditionalHeaders($result['etag'], $rowCount, $result['last_modified']);
 		
-		$ifModSin = processIfModifiedHeaders();
-		$ifUnmodSin = processIfUnmodifiedSinceHeader($resTime);
-		$ifMatch = processIfMatchHeader();
-		$ifNoneMatch = processIfNoneMatchHeader();
-		
-		if($ifMatch && !$ifNoneMatch && !$ifModSin) {
-			if(!in_array($result['etag'], $ifMatch) || (in_array("*", $ifMatch) && $rowCount == 0)) {
-				header('HTTP/1.1 412 Precondition Failed');
-				exit;
-			}
-		} elseif($ifNoneMatch && !$ifMatch && !$ifUnmodSin) {
-			if(in_array($result['etag'], $ifNoneMatch) || in_array("*", $ifNoneMatch)) {
-				if($ifModSin) {
-					if($ifModSin == strtotime($result['last_modified'])) {
-						header('HTTP/1.1 304 Not Modified');
-						exit;					
-					}
-				} else {
-					header('HTTP/1.1 304 Not Modified');
-					header('Etag: '.$result['etag']);
-					header('Last-Modified: '.$result['last_modified']);
-					exit;
-				}
-			}
-		} elseif($ifModSin && !$ifMatch && !$ifUnmodSin) {
-			if($ifModSin == strtotime($result['last_modified'])) {
-				header('HTTP/1.1 304 Not Modified');
-				exit;
-			}
-		} elseif($ifUnmodSin && !$ifNoneMatch && !$ifModSin) {
-			if($ifUnModSin != strtotime($result['last_modified'])) {
-				header('HTTP/1.1 412 Precondition Failed');
-				exit;
-			}
-		}
-		
-		json_encode($result);
+			$output = json_encode($result);
 			
-		header('HTTP/1.1 200 OK');
-		header('Content-Type: application/json');
-		header('Content-Length: '.strlen($output));
-		header('Etag: '.$result['etag']);
-		header('Last-Modified: '.$result['last_modified']);
+			header('HTTP/1.1 200 OK');
+			header('Content-Type: application/json');
+			header('Content-Length: '.strlen($output));
+			header('Etag: '.$result['etag']);
+			header('Last-Modified: '.$result['last_modified']);
 
-		if($verb === "GET") {
-			echo $output;
+			if($verb === "GET") {
+				echo $output;
+			}
+			exit;
+		} else {			
+			header('HTTP/1.1 404 Not Found');
+			exit;
 		}
-		exit;
 	} else {
 		header('HTTP/1.1 500 Internal Server Error');
 		exit;
