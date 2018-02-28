@@ -1,0 +1,227 @@
+DROP DATABASE modintro_db;
+
+CREATE DATABASE modintro_db
+	DEFAULT CHARACTER SET utf8
+	DEFAULT COLLATE utf8_general_ci;
+
+USE modintro_db;
+
+# Set timezone to GMT for Http-date compliance
+SET time_zone = '+0:00';
+	
+CREATE TABLE user (
+	userID					INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	name					VARCHAR(60) NOT NULL,
+	password 				VARCHAR(255) NOT NULL,
+	email					VARCHAR(255) NOT NULL,
+	type					TINYTEXT,
+	UNIQUE(email),
+	PRIMARY KEY(userID)	
+)
+ENGINE = MyISAM;
+
+CREATE TABLE user_history (
+	historyID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	userID_FK				INT UNSIGNED NOT NULL,	
+	registration_date			TIMESTAMP,	
+	last_activity				TIMESTAMP,
+	PRIMARY KEY(historyID)
+)
+ENGINE = MyISAM;
+
+# Table to hold newly registered users till email is verified.
+CREATE TABLE prospective_user (
+	email 					VARCHAR(255),
+	email_verify_code			VARCHAR(32),
+	time_email_sent				TIMESTAMP,
+	email_validated				BOOLEAN DEFAULT 0
+)
+ENGINE = MyISAM;
+
+CREATE TABLE announcement (
+	announcementID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	userID_FK				INT UNSIGNED NOT NULL,
+	date					TIMESTAMP,
+	headline				TINYTEXT,
+	body					TEXT NOT NULL,
+	previous				INT UNSIGNED,		# previous announcement
+	allow_comments				BOOLEAN DEFAULT 1,
+	deleted					BOOLEAN DEFAULT 0,
+	etag					VARCHAR(32),
+	last_modified				TIMESTAMP,
+	PRIMARY KEY(announcementID)	
+)
+ENGINE = MyISAM;
+
+CREATE TABLE keywords (
+	keywordID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	keyword					TINYTEXT,
+	PRIMARY KEY(keywordID)
+)
+ENGINE = MyISAM;
+
+CREATE TABLE announcement_keyword (
+	announcementID_FK			INT UNSIGNED NOT NULL,
+	keywordID_FK				INT UNSIGNED NOT NULL,
+	PRIMARY KEY(announcementID_FK, keywordID_FK)
+)
+ENGINE = MyISAM;	
+
+CREATE TABLE comment (
+	commentID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	announcementID_FK			INT UNSIGNED NOT NULL,
+	userID_FK				INT UNSIGNED NOT NULL,
+	reply_to_FK				INT UNSIGNED,	# reply to comment
+	body					TEXT,
+	deleted					BOOLEAN DEFAULT 0,
+	etag					VARCHAR(32),
+	last_modified				TIMESTAMP,
+	PRIMARY KEY(commentID)	
+)
+ENGINE = MyISAM;
+
+CREATE TABLE follower (
+	followerID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	leader_userID_FK			INT UNSIGNED NOT NULL,
+	follower_userID_FK			INT UNSIGNED NOT NULL,	
+	date					TIMESTAMP NOT NULL,
+	PRIMARY KEY(followerID),
+	UNIQUE(leader_userID_FK, follower_userID_FK)
+)
+ENGINE = MyISAM;
+
+
+
+CREATE TABLE message (
+	messageID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	title					TINYTEXT NOT NULL,
+	body					TEXT NOT NULL,
+	to_userID_FK				INT UNSIGNED NOT NULL,
+	from_userID_FK				INT UNSIGNED NOT NULL,
+	date					TIMESTAMP NOT NULL,
+	accepted				BOOLEAN DEFAULT 0,	# opened by reviever?
+	etag					VARCHAR(32),
+	last_modified				TIMESTAMP,
+	PRIMARY KEY(messageID)
+)
+ENGINE = MyISAM;	
+
+
+# Table to keep collect metadata about other tables.
+CREATE TABLE table_metadata (
+	tableID				INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	table_name			VARCHAR(50) NOT NULL,
+	last_modified			TIMESTAMP NOT NULL DEFAULT NOW(),
+	PRIMARY KEY(tableID)	
+)
+ENGINE = MyISAM;
+
+# Insert tables to collect metadata on into the table_metadata table.
+INSERT INTO table_metadata (table_name) VALUES("prospective_user");
+INSERT INTO table_metadata (table_name) VALUES("user");
+#INSERT INTO table_metadata (table_name) VALUES("");
+
+
+# Triggers for prospective_user table 
+delimiter |
+CREATE TRIGGER prospective_user_after_insert AFTER INSERT ON prospective_user 
+	FOR EACH ROW
+		BEGIN
+			CALL metadata_update_proc("prospective_user");
+		END;
+|
+
+CREATE TRIGGER prospective_user_after_update AFTER UPDATE ON prospective_user
+	FOR EACH ROW
+		BEGIN
+			CALL metadata_update_proc("prospective_user");
+		END;
+|
+
+CREATE TRIGGER prospective_user_after_delete AFTER DELETE ON prospective_user
+	FOR EACH ROW
+		BEGIN
+			CALL metadata_update_proc("prospective_user");
+		END;
+|
+delimiter ;
+
+# Triggers for user table 
+delimiter |
+CREATE TRIGGER user_after_insert AFTER INSERT ON user 
+	FOR EACH ROW
+		BEGIN
+			INSERT INTO user_history (userID_FK, registration_date, last_activity) VALUES(NEW.userID, NOW(), NOW());		
+			CALL metadata_update_proc("user");
+		END;
+|
+
+CREATE TRIGGER user_after_update AFTER UPDATE ON user
+	FOR EACH ROW
+		BEGIN
+			CALL metadata_update_proc("user");
+		END;
+|
+
+CREATE TRIGGER user_after_delete AFTER DELETE ON user
+	FOR EACH ROW
+		BEGIN
+			CALL metadata_update_proc("user");
+			DELETE FROM user_history WHERE userID_FK = OLD.userID;
+		END;
+|
+
+CREATE TRIGGER insert_announcement BEFORE INSERT ON announcement
+	FOR EACH ROW
+		BEGIN
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE TRIGGER update_announcement BEFORE UPDATE ON announcement
+	FOR EACH ROW
+		BEGIN
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE TRIGGER insert_comment BEFORE INSERT ON comment
+	FOR EACH ROW
+		BEGIN
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE TRIGGER update_comment BEFORE UPDATE ON comment
+	FOR EACH ROW
+		BEGIN			
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE TRIGGER insert_message BEFORE INSERT ON message
+	FOR EACH ROW
+		BEGIN			
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE TRIGGER update_message BEFORE UPDATE ON message
+	FOR EACH ROW
+		BEGIN			
+			SET NEW.last_modified=NOW();
+			SET NEW.etag=MD5(FLOOR(RAND() * 100));
+		END;
+|
+
+CREATE PROCEDURE metadata_update_proc(IN name VARCHAR(50))
+	BEGIN
+		UPDATE table_metadata SET last_modified = NOW() WHERE table_name = name;
+	END
+|
+delimiter ;
