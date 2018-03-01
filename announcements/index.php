@@ -34,7 +34,7 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 		header("HTTP/1.1 200 OK");
 		header("Allow: DELETE, GET, HEAD, POST, PUT");
 		exit;
-	} elseif($HTTPverb === "POST") {
+	} elseif($HTTPVerb === "POST") {
 		postAnnouncement();
 	} elseif($HTTPVerb === "PUT") {
 		putAnnouncements();
@@ -156,7 +156,7 @@ function getAnnouncements($verb) {
 		$results = $stmt->fetchAll(PDO::FETCH_ASSOC);		
 		$aList = array();
 		foreach($results as $row) {
-			$announcement = new Announcement($row['announcementID'], $row['userID_FK'], $row['date_posted'],
+			$announcement = new Announcement($row['announcementID'], $row['userID_FK'], $row['date'],
 					$row['headline'], $row['body'], $row['previous'], $row['allow_comments'],
 					$row['deleted'], $row['etag'], $row['last_modified']);
 			$aList[] = $announcement->toArray();
@@ -186,33 +186,49 @@ function postAnnouncement() {
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {
 		
+		// $headline = null;
+		// $body = null;
+		// $previous = null;
+		// $allowComments = null;
+		
 		if(!empty($_POST)) {
 			$mflag = FALSE;
 			if(($userType === "MASTER" || $userType === "ADMIN") && isset($_POST['userid_fk'])) {
 				$userID_FK = $_POST['userid_fk'];
 				$mflag = TRUE;
 			}
-			if(isset($_POST['date_posted']) && $_POST['headline'] && isset($_POST['body']) && isset($_POST[''])) {
+			if(isset($_POST['headline']) && isset($_POST['body'])) {
 				$headline = trim($_POST['headline']);
 				$body = $_POST['body'];
+				if(isset($_POST['comments'])) {
+					$allowComments = $_POST['comments'];
+				} else {
+					$allowComments = null;
+				}
+				if(isset($_POST['previous'])) {
+					$previous = $_POST['previous'];
+				} else {
+					$previous = null;
+				}
 			} else {
 				header('HTTP/1.1 400 Bad Request');
 				exit;
 			}
 
 			$stmt = $dbconn->prepare("INSERT INTO announcement
-				(userID_FK, date_posted, headline, body, previous, allow_comments, deleted)
-				VALUES(:userID, NOW(), :headline, :body, :previous, :allowComments)");	
+				(userID_FK, date, headline, body, previous, allow_comments)
+				VALUES(:userID_FK, NOW(), :headline, :body, :previous, :allowComments)");	
 				
 			if($mflag) {
 				$stmt->bindParam(':userID_FK', $userID_FK);
 			} else {
-				$stmt->bindParam(':userID', $user->getId());
+				$uid = $user->getId();
+				$stmt->bindParam(':userID_FK', $uid);
 			}
 			$stmt->bindParam(':headline', $headline);
 			$stmt->bindParam(':body', $body);
-			$stmt->bindParam(':previous', $previos);
-			$stmt->bindParam(':allowCommnets', $allowComments);
+			$stmt->bindParam(':previous', $previous);
+			$stmt->bindParam(':allowComments', $allowComments);
 			
 			if($stmt->execute()) {
 				$i = $dbconn->lastInsertId();
@@ -305,11 +321,7 @@ function putAnnouncements() {
 
 
 /* URL:	/announcements/{announcementID}	*/
-function deleteAnnouncement($announcementId) {
-	if(isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
-		header('HTTP/1.1 412 Precondition Failed');
-		exit;
-	}
+function deleteAnnouncement($announcementId) { 
 	$dbconn = getDatabaseConnection();
 	$user = authenticateUser($dbconn);
 	
@@ -321,7 +333,8 @@ function deleteAnnouncement($announcementId) {
 		if(($userType === "MASTER" || $userType === "ADMIN") && isset($_GET['userid'])) {
 			$stmt->bindParam(':userID', $_GET['userid']);
 		} else {
-			$stmt->bindParam(':userID', $user->getId());
+			$uid = $user->getId();
+			$stmt->bindParam(':userID', $uid);
 		}
 		$stmt->bindParam(':announcementID', $announcementId);
 		
@@ -329,15 +342,18 @@ function deleteAnnouncement($announcementId) {
 			$rowCount = $stmt->rowCount();
 			if($rowCount == 1) { 
 				$result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+				$result = $result[0];
+				$stmt->close();
 				processConditionalHeaders($result['etag'], $rowCount, $result['last_modified']);
 				
 				// Delete the resource
-				$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID AND anouncementID=:announcementID");
+				$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID AND announcementID=:announcementID");
 				
 				if(($userType === "MASTER" || $userType === "ADMIN") && isset($_GET['userid'])) {
 					$stmt->bindParam(':userID', $_GET['userid']);
 				} else {
-					$stmt->bindParam(':userID', $user->getId());
+					$uid = $user->getId();
+					$stmt->bindParam(':userID', $uid);
 				}
 				$stmt->bindParam(':announcementID', $announcementId);
 				
