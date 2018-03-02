@@ -261,11 +261,11 @@ function putAnnouncements() {
 				exit;
 			}
 			
-			$sql = 'INSERT INTO announcement (userID_FK, date_posted, headline, body,
+			$sql = 'INSERT INTO announcement (userID_FK, date, headline, body,
 					 previous, allow_comments, deleted) VALUES ';
 			$count = count($announcements);
 			for($i = 0; $i < $count; $i++) {
-				if(isset($announcement[$i]['UserID']) && isset($announcements[$i]['DatePosted'])
+				if(isset($announcements[$i]['UserID']) && isset($announcements[$i]['Date'])
 						&& isset($announcements[$i]['Headline']) && isset($announcements[$i]['Body'])
 						&& isset($announcements[$i]['Previous']) && isset($announcements[$i]['AllowComments'])
 						&& isset($announcements[$i]['Deleted'])) {
@@ -273,16 +273,25 @@ function putAnnouncements() {
 							if($i < ($count - 1)) {
 								$sql .= ', ';
 							}
-						} else {
-							header('HTTP/1.1 400 Bad Request');
-							exit;
-						}
+				} else {
+					header('HTTP/1.1 400 Bad Request'); echo 'SHITBERG'.$count;
+					exit;
+				}
 			}
 			
 			try {
 				// Should use transaction but can't with MyISAM
-				$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID");
-				$stmt->bindParam(':userID', $userId);
+				if($userType === "MASTER" || $userType === "ADMIN") {
+					if(isset($_GET['userid'])) {
+						$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID");
+						$stmt->bindParam(':userID', $userId);
+					} else {
+						$stmt = $dbconn->prepare("DELETE FROM announcement WHERE");
+					}					
+				} else {
+					$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID");
+					$stmt->bindParam(':userID', $userId);
+				}				
 				$stmt->execute();
 				$stmt->closeCursor();
 				
@@ -291,7 +300,7 @@ function putAnnouncements() {
 				$pos = 0;
 				foreach($announcements as $a) {
 					$stmt->bindParam(++$pos, $a['UserID']);
-					$stmt->bindParam(++$pos, $a['DatePosted']);
+					$stmt->bindParam(++$pos, $a['Date']);
 					$stmt->bindParam(++$pos, $a['Headline']);
 					$stmt->bindParam(++$pos, $a['Body']);
 					$stmt->bindParam(++$pos, $a['Previous']);
@@ -300,11 +309,11 @@ function putAnnouncements() {
 				}
 				
 				if($stmt->execute()) {
-					header('HTTP/1.1 204 No Content');
+					header('HTTP/1.1 204 No Content');echo 'CHEERS';
 				} else {
 					header('HTTP/1.1 500 Internal Server Error');
-					exit;
 				}
+				exit;
 			} catch(PDOException $e) {
 				echo $e->getMessage();
 			}
@@ -343,7 +352,7 @@ function deleteAnnouncement($announcementId) {
 			if($rowCount == 1) { 
 				$result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 				$result = $result[0];
-				$stmt->close();
+				$stmt->closeCursor();
 				processConditionalHeaders($result['etag'], $rowCount, $result['last_modified']);
 				
 				// Delete the resource
@@ -365,6 +374,7 @@ function deleteAnnouncement($announcementId) {
 					exit;
 				}				
 			} else {
+				processConditionalHeaders(null, $rowCount, null);
 				header('HTTP/1.1 204 No Content');
 				exit;
 			}			
@@ -403,7 +413,8 @@ function getAnnouncement($verb, $announcementId) {
 				echo $output;
 			}
 			exit;
-		} else {			
+		} else {
+			processConditionalHeaders(null, $rowCount, null);
 			header('HTTP/1.1 404 Not Found');
 			exit;
 		}
@@ -420,7 +431,9 @@ function putAnnouncement($announcementId) {
 	}
 	
 	$putVar = json_decode(file_get_contents("php://input"), true);
-	if(isset($putVar) && array_key_exists('Headline', $putVar) && array_key_exists('Body', $putVar)) {
+	if(isset($putVar) && array_key_exists('Headline', $putVar) && array_key_exists('Body', $putVar)
+			&& array_key_exists('Previous', $putVar) && array_key_exists('AllowComments', $putVar)
+			&& array_key_exists('Deleted', $putVar)) {
 		$dbconn = getDatabaseConnection();
 		$user = authenticateUser($dbconn);
 		
@@ -434,26 +447,28 @@ function putAnnouncement($announcementId) {
 			$rowCount = $stmt->rowCount();
 			$stmt->closeCursor();			
 			
-			if($rowCount == 1) { // Update (replace) existing resource
-				
+			if($rowCount == 1) { // Update (replace) existing resource				
 				processConditionalHeaders($result['etag'], $stmt->rowCount(), $result['last_modified']);
 				
-				$stmt = $dbconn->prepare("UPDATE announcement SET date_posted=NOW(), headline=:headline, body=:body
-								WHERE announcementID=:announcementID");
-				$stmt->bindParam(':headline', $putVar['Headline']);
-				$stmt->bindParam(':body', $putVar['Body']);
-				$stmt->bindParam(':announcementID', $announcementId);
-				
+				$stmt = $dbconn->prepare("UPDATE announcement SET date=NOW(), headline=:headline, body=:body,
+								previous=:previous, allow_comments=:allowComments, userID_FK=:userID, deleted=:deleted
+								WHERE announcementID=:announcementID");					
 			} else { // Create a new resource
 				processConditionalHeaders(null, 0, null);
 				
-				$stmt = $dbconn->prepare("INSERT INTO announcement (announcementID, userID_FK, date_posted, headline, body)
-								VALUES(:announcementID, :userID, NOW(), :headline, :body)");
-				$stmt->bindParam(':announcementID', $announcementId);
-				$stmt->bindParam(':userID', $user->getId());
-				$stmt->bindParam(':headline', $putVar['Headline']);
-				$stmt->bindParam(':body', $putVar['Body']);
+				$stmt = $dbconn->prepare("INSERT INTO announcement
+								(announcementID, userID_FK, date, headline, body, previous, deleted, allow_comments)
+								VALUES(:announcementID, :userID, NOW(), :headline, :body, :previous, :deleted, :allowComments)");
 			}
+			
+			$uid = $user->getId();
+			$stmt->bindParam(':announcementID', $announcementId);
+			$stmt->bindParam(':userID', $uid);
+			$stmt->bindParam(':headline', $putVar['Headline']);
+			$stmt->bindParam(':body', $putVar['Body']);
+			$stmt->bindParam(':allowComments', $putVar['AllowComments']);
+			$stmt->bindParam(':previous', $putVar['Previous']);
+			$stmt->bindParam(':deleted', $putVar['Deleted']);
 			
 			if($stmt->execute()) {
 				header('HTTP/1.1 204 No Content');
@@ -464,7 +479,7 @@ function putAnnouncement($announcementId) {
 			}
 		}
 	} else {
-		header('HTTP/1.1 400 Bad Request');
+		header('HTTP/1.1 400 Bad Request');echo 'CHEESEBURGER';
 		exit;
 	}
 }
