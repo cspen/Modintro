@@ -63,6 +63,9 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 		header("Allow:  DELETE, GET, HEAD, OPTIONS, PUT");
 		exit;
 	}
+} else {
+	header('HTTP/1.1 404 Not Found');
+	exit;
 }
 
 /* URL: /announcements/ */
@@ -74,10 +77,18 @@ function deleteAnnouncements() {
 		$query = "DELETE FROM announcement";
 		$fromFlag = $toFlag = FALSE;
 		if(isset($_GET['from'])) {
+			if(!is_numeric($_GET['from'])) {
+				header('HTTP/1.1 400 Bad Request');
+				exit;
+			}
 			$query .= " WHERE announcementID >= :fromID";
 			$fromFlag = TRUE;
 		}
 		if(isset($_GET['to'])) {
+			if(!is_numeric($_GET['to'])) {
+				header('HTTP/1.1 400 Bad Request');
+				exit;
+			}
 			$toFlag = TRUE;
 			if($fromFlag) {
 				$query .= " AND announcementID <= :toID";
@@ -107,19 +118,8 @@ function deleteAnnouncements() {
 	}
 }
 
-function getAnnouncements($verb) {	
+function getAnnouncements($verb) {
 	$query = "SELECT * FROM announcement WHERE deleted=FALSE";
-	
-	// Process url parameters
-	if(isset($_GET['page']) && isset($_GET['pagesize'])) {
-		if($_GET['page'] >= 0 && $_GET['pagesize'] >= 0) {
-			$page = ($_GET['page'] - 1) * $_GET['pagesize'];
-			$query .= " limit ".$page.", ".$_GET['pagesize'];
-		} else {
-			header('HTTP/1.1 400 Bad Request');
-			exit;
-		}
-	}
 	
 	$sortBy = array("date", "headline", "type");
 	if(isset($_GET['sort'])) {
@@ -137,11 +137,21 @@ function getAnnouncements($verb) {
 			$order = $_GET['order'];
 			if($order === "desc") {
 				$query .= " DESC";
-				// ascending is default
 			} else {
 				header('HTTP/1.1 400 Bad Request');
 				exit;
 			}
+		}
+	}
+	
+	// Process url parameters
+	if(isset($_GET['page']) && isset($_GET['pagesize'])) {
+		if($_GET['page'] > 0 && $_GET['pagesize'] > 0) {
+			$page = ($_GET['page'] - 1) * $_GET['pagesize'];
+			$query .= " limit ".$page.", ".$_GET['pagesize'];
+		} else {
+			header('HTTP/1.1 400 Bad Request');
+			exit;
 		}
 	}
 	
@@ -185,11 +195,6 @@ function postAnnouncement() {
 	
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {
-		
-		// $headline = null;
-		// $body = null;
-		// $previous = null;
-		// $allowComments = null;
 		
 		if(!empty($_POST)) {
 			$mflag = FALSE;
@@ -265,51 +270,64 @@ function putAnnouncements() {
 					 previous, allow_comments, deleted) VALUES ';
 			$count = count($announcements);
 			for($i = 0; $i < $count; $i++) {
-				if(isset($announcements[$i]['UserID']) && isset($announcements[$i]['Date'])
-						&& isset($announcements[$i]['Headline']) && isset($announcements[$i]['Body'])
-						&& isset($announcements[$i]['Previous']) && isset($announcements[$i]['AllowComments'])
-						&& isset($announcements[$i]['Deleted'])) {
+				if(isset($announcements[$i]['Date']) && isset($announcements[$i]['Headline'])
+						&& isset($announcements[$i]['Body']) && isset($announcements[$i]['Previous'])
+						&& isset($announcements[$i]['AllowComments']) && isset($announcements[$i]['Deleted'])) {
+							
+							validateNumericFields($announcements[$i]);
 							$sql .= '(?, ?, ?, ?, ?, ?, ?)';
 							if($i < ($count - 1)) {
 								$sql .= ', ';
 							}
 				} else {
-					header('HTTP/1.1 400 Bad Request'); echo 'SHITBERG'.$count;
+					header('HTTP/1.1 400 Bad Request');
 					exit;
 				}
 			}
 			
 			try {
+				if(isset($_GET['userid'])) {
+					$guid = $_GET['userid'];
+				} else {
+					$guid = false;
+				}
+
 				// Should use transaction but can't with MyISAM
 				if($userType === "MASTER" || $userType === "ADMIN") {
-					if(isset($_GET['userid'])) {
+					if($guid) {
 						$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID");
-						$stmt->bindParam(':userID', $userId);
+						$stmt->bindParam(':userID', $guid);
 					} else {
-						$stmt = $dbconn->prepare("DELETE FROM announcement WHERE");
+						$stmt = $dbconn->prepare("DELETE FROM announcement");
 					}					
-				} else {
-					$stmt = $dbconn->prepare("DELETE FROM announcement WHERE userID_FK=:userID");
-					$stmt->bindParam(':userID', $userId);
-				}				
-				$stmt->execute();
-				$stmt->closeCursor();
+				}			
 				
-				$stmt = $dbconn->prepare($sql);
-				$count = count($announcements);
-				$pos = 0;
-				foreach($announcements as $a) {
-					$stmt->bindParam(++$pos, $a['UserID']);
-					$stmt->bindParam(++$pos, $a['Date']);
-					$stmt->bindParam(++$pos, $a['Headline']);
-					$stmt->bindParam(++$pos, $a['Body']);
-					$stmt->bindParam(++$pos, $a['Previous']);
-					$stmt->bindParam(++$pos, $a['AllowComments']);
-					$stmt->bindParam(++$pos, $a['Deleted']);
+				if($stmt->execute()) {
+					$stmt->closeCursor();
+				
+					$stmt = $dbconn->prepare($sql);
+					$count = count($announcements);
+					$pos = 0;
+					foreach($announcements as $a) {
+						if($userId && $userType === "MASTER" || $userType === "ADMIN") {
+							$stmt->bindParam(++$pos, $guid);
+						} else {
+							$stmt->bindParam(++$pos, $a['UserID']);
+						}
+						$stmt->bindParam(++$pos, $a['Date']);
+						$stmt->bindParam(++$pos, $a['Headline']);
+						$stmt->bindParam(++$pos, $a['Body']);
+						$stmt->bindParam(++$pos, $a['Previous']);
+						$stmt->bindParam(++$pos, $a['AllowComments']);
+						$stmt->bindParam(++$pos, $a['Deleted']);
+					}
+				} else {
+					header('500 Internal Server Error');
+					exit;
 				}
 				
 				if($stmt->execute()) {
-					header('HTTP/1.1 204 No Content');echo 'CHEERS';
+					header('HTTP/1.1 204 No Content');
 				} else {
 					header('HTTP/1.1 500 Internal Server Error');
 				}
@@ -434,6 +452,9 @@ function putAnnouncement($announcementId) {
 	if(isset($putVar) && array_key_exists('Headline', $putVar) && array_key_exists('Body', $putVar)
 			&& array_key_exists('Previous', $putVar) && array_key_exists('AllowComments', $putVar)
 			&& array_key_exists('Deleted', $putVar)) {
+				
+		validateNumericFields($putVar);
+		
 		$dbconn = getDatabaseConnection();
 		$user = authenticateUser($dbconn);
 		
@@ -444,11 +465,12 @@ function putAnnouncement($announcementId) {
 			$stmt->bindParam(':announcementID', $announcementId);
 			$stmt->execute();
 			$results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+			$results = $results[0];
 			$rowCount = $stmt->rowCount();
 			$stmt->closeCursor();			
 			
 			if($rowCount == 1) { // Update (replace) existing resource				
-				processConditionalHeaders($result['etag'], $stmt->rowCount(), $result['last_modified']);
+				processConditionalHeaders($results['etag'], $stmt->rowCount(), $results['last_modified']);
 				
 				$stmt = $dbconn->prepare("UPDATE announcement SET date=NOW(), headline=:headline, body=:body,
 								previous=:previous, allow_comments=:allowComments, userID_FK=:userID, deleted=:deleted
@@ -479,7 +501,20 @@ function putAnnouncement($announcementId) {
 			}
 		}
 	} else {
-		header('HTTP/1.1 400 Bad Request');echo 'CHEESEBURGER';
+		header('HTTP/1.1 400 Bad Request');
+		exit;
+	}
+}
+
+function validateNumericFields($a) {
+	if(!is_numeric($a['Previous']) || !is_numeric($a['AllowComments'])
+			|| !is_numeric($a['Deleted'])) {
+		header('HTTP/1.1 400 Bad Request');
+		exit;
+	}
+	if($a['Previous'] > 1 || $a['Previous'] < 0 || $a['AllowComments'] > 1
+			|| $a['AllowComments'] < 0 || $a['Deleted'] > 1 || $a['Deleted'] < 0) {
+		header('HTTP/1.1 400 Bad Request');
 		exit;
 	}
 }
