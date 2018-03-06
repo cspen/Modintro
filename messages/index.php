@@ -118,18 +118,7 @@ function getMessages($verb) {
 			$userID = $_GET['userid'];
 		}
 		$query = "SELECT * FROM message WHERE to_userID_FK=:toUserID";
-	
-		// Process url parameters
-		if(isset($_GET['page']) && isset($_GET['pagesize'])) {
-			if($_GET['page'] >= 0 && $_GET['pagesize'] >= 0) {
-				$page = ($_GET['page'] - 1) * $_GET['pagesize'];
-				$query .= " limit ".$page.", ".$_GET['pagesize'];
-			} else {
-				header('HTTP/1.1 400 Bad Request');
-				exit;
-			}
-		}
-	
+		
 		$sortBy = array("title", "from", "date");
 		if(isset($_GET['sort'])) {
 			if(in_array($_GET['sort'], $sortBy)) {
@@ -138,7 +127,7 @@ function getMessages($verb) {
 				header('HTTP/1.1 400 Bad Request');
 				exit;
 			}
-		
+			
 			// Sort order - asc default
 			if(isset($_GET['order'])) {
 				$order = $_GET['order'];
@@ -149,6 +138,17 @@ function getMessages($verb) {
 					header('HTTP/1.1 400 Bad Request');
 					exit;
 				}
+			}
+		}
+	
+		// Process url parameters
+		if(isset($_GET['page']) && isset($_GET['pagesize'])) {
+			if($_GET['page'] >= 0 && $_GET['pagesize'] >= 0) {
+				$page = ($_GET['page'] - 1) * $_GET['pagesize'];
+				$query .= " limit ".$page.", ".$_GET['pagesize'];
+			} else {
+				header('HTTP/1.1 400 Bad Request');
+				exit;
 			}
 		}
 		

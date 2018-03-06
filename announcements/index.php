@@ -121,7 +121,7 @@ function deleteAnnouncements() {
 function getAnnouncements($verb) {
 	$query = "SELECT * FROM announcement WHERE deleted=FALSE";
 	
-	$sortBy = array("date", "headline", "type");
+	$sortBy = array("date", "headline");
 	if(isset($_GET['sort'])) {
 		if(in_array($_GET['sort'], $sortBy)) {
 			$query .= " ORDER BY ".$_GET['sort'];

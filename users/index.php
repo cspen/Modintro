@@ -185,23 +185,12 @@ function getUsers($verb) {
 	
 	$query = "SELECT user.userID, user.name, user.email, user.type,
 		user_history.registration_date, user_history.last_activity
-		FROM user LEFT JOIN user_history ON user_history.userID_FK=user.userID";	
-	
-	// Process url parameters
-	if(isset($_GET['page']) && isset($_GET['pagesize'])) {
-		if($_GET['page'] >= 0 && $_GET['pagesize'] >= 0) {
-			$page = ($_GET['page'] - 1) * $_GET['pagesize'];
-			$query .= " limit ".$page.", ".$_GET['pagesize'];
-		} else {
-			header('HTTP/1.1 400 Bad Request');
-			exit;
-		}
-	}
+		FROM user LEFT JOIN user_history ON user_history.userID_FK=user.userID";
 	
 	$sortBy = array("userid", "name", "email", "type");
 	if(isset($_GET['sort'])) {
 		if(in_array($_GET['sort'], $sortBy)) {
-			$query .=" ORDER BY ".$_GET['sort'];			 
+			$query .=" ORDER BY ".$_GET['sort'];
 		} else {
 			header('HTTP/1.1 400 Bad Request');
 			exit;
@@ -220,6 +209,17 @@ function getUsers($verb) {
 		}
 	}
 	
+	// Process url parameters
+	if(isset($_GET['page']) && isset($_GET['pagesize'])) {
+		if($_GET['page'] >= 0 && $_GET['pagesize'] >= 0) {
+			$page = ($_GET['page'] - 1) * $_GET['pagesize'];
+			$query .= " limit ".$page.", ".$_GET['pagesize'];
+		} else {
+			header('HTTP/1.1 400 Bad Request');
+			exit;
+		}
+	}
+		
 	$dbconn = getDatabaseConnection();
 	$stmt = $dbconn->prepare($query);
 	if($stmt->execute()) {
