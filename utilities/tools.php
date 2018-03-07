@@ -36,8 +36,7 @@ function processHostHeader() {
  * https://tools.ietf.org/html/rfc2616#section-14.20
  */
 function processExpectHeader() {
-	if(isset($_SERVER['HTTP_EXPECT'])) {
-		
+	if(isset($_SERVER['HTTP_EXPECT'])) {		
 		header('HTTP/1.1 417 Expectation Failed');
 		exit;
 	}
@@ -133,7 +132,7 @@ function processLanguageHeader() {
 		$f = FALSE;
 		foreach($langs as $lang) {
 			$l = explode(";", $lang);
-			echo $l[0].'<br>';
+			// echo $l[0].'<br>';
 			if(in_array(trim($l[0]), $LANGUAGE)) {
 				$f = TRUE;
 				break;
@@ -159,8 +158,8 @@ function processIfMatchHeader() {
  * https://tools.ietf.org/html/rfc2616#section-14.26
  */
 function processIfNoneMatchHeader() {
-	if(!isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
-		$etags = array_map('trim', explode(',', $_SERVER['HTTP_IF_MATCH']));
+	if(isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
+		$etags = array_map('trim', explode(',', $_SERVER['HTTP_IF_NONE_MATCH']));
 		return $etags;
 	}
 	return NULL;
@@ -170,60 +169,38 @@ function processIfNoneMatchHeader() {
  * 
  * https://tools.ietf.org/html/rfc2616#section-14.25
  */
-function processIfModifiedSinceHeader($resTime) {
+function processIfModifiedSinceHeader() {
 	if(isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {			
-		$reqTime = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-		$resTime = strtotime($resTime);
-		if(!$reqTime || $reqTime > $resTime) {
-			header('HTTP/1.1 404 Bad Request');
-			exit;
-		} elseif(($resTime - $reqTime) == 0) {
-			header('HTTP/1.1 304 Not Modified');
-			exit;
-		} 
-		return TRUE;
-	} else {
-		return FALSE;
+		return strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
 	}
 }
 
 /**
  * https://tools.ietf.org/html/rfc2616#section-14.28
  */
-function processIfUnmodifiedSinceHeader($resTime) {
-	if(!isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) &&
-			isset($_SERVER['HTTP_IF_UNMODIFIED_SINCE'])) {
-		$reqTime = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-		$resTime = strtotime($resTime);
-		if(!$reqTime) {
-			header('HTTP/1.1 404 Bad Request');
-			exit;
-		} elseif(($resTime - $reqTime) != 0) {
-			header('HTTP/1.1 412 Precondition Failed');
-			exit;
-		}
+function processIfUnmodifiedSinceHeader() {
+	if(isset($_SERVER['HTTP_IF_UNMODIFIED_SINCE'])) {
+		return strtotime($_SERVER['HTTP_IF_UNMODIFIED_SINCE']);
 	}
 }
 
 function processConditionalHeaders($etag, $rowCount, $lastModified) {
-	$ifModSin = processIfModifiedHeaders();
-	$ifUnmodSin = processIfUnmodifiedSinceHeader($resTime);
+	$ifModSin = processIfModifiedSinceHeader();
+	$ifUnmodSin = processIfUnmodifiedSinceHeader();
 	$ifMatch = processIfMatchHeader();
 	$ifNoneMatch = processIfNoneMatchHeader();
 	
-	if($ifMatch && !$ifNoneMatch && !$ifModSin) {
-		if(!in_array($etag, $ifMatch) || (in_array("*", $ifMatch) && $rowCount == 0)) {
+	if($ifMatch && !$ifNoneMatch && !$ifModSin) {		
+		if((in_array('*', $ifMatch) && ($rowCount == 0))) {
+			header('HTTP/1.1 412 Precondition Failed');
+			exit;			
+		}  elseif(!in_array($etag, $ifMatch)) {
 			header('HTTP/1.1 412 Precondition Failed');
 			exit;
 		}
 	} elseif($ifNoneMatch && !$ifMatch && !$ifUnmodSin) {
 		if(in_array($etag, $ifNoneMatch) || in_array("*", $ifNoneMatch)) {
-			if($ifModSin) {
-				if($ifModSin == strtotime($lastModified)) {
-					header('HTTP/1.1 304 Not Modified');
-					exit;
-				}
-			} else {
+			if($ifModSin > strtotime($lastModified)) {
 				header('HTTP/1.1 304 Not Modified');
 				header('Etag: '.$etag);
 				header('Last-Modified: '.$lastModified);
@@ -231,23 +208,30 @@ function processConditionalHeaders($etag, $rowCount, $lastModified) {
 			}
 		}
 	} elseif($ifModSin && !$ifMatch && !$ifUnmodSin) {
-		if($ifModSin == strtotime($lastModified)) {
+		if($ifModSin > strtotime($lastModified)) {
 			header('HTTP/1.1 304 Not Modified');
+			header('Etag: '.$etag);
+			header('Last-Modified: '.$lastModified);
 			exit;
 		}
 	} elseif($ifUnmodSin && !$ifNoneMatch && !$ifModSin) {
-		if($ifUnModSin != strtotime($lastModified)) {
+		if($ifUnmodSin < strtotime($lastModified)) {
 			header('HTTP/1.1 412 Precondition Failed');
+			header('Etag: '.$etag);
+			header('Last-Modified: '.$lastModified);
 			exit;
 		}
 	}
 }
 
 /**
- *
+ * Compare two etags using strong comparison
+ * according to:
+ * https://tools.ietf.org/html/rfc2616#section-13.3.3
+ * 
  * @param first etag 		$tag1
  * @param second etag 		$tag2
- * @return boolean
+ * @return boolean * 
  */
 function compareEtags($tag1, $tag2) {
 	if($tag1 === "*" || $tag2 === "*") {
