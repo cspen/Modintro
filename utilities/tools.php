@@ -13,8 +13,6 @@ function processHeaders() {
 	processCharsetHeader();
 	// processAcceptHeader();
 	processLanguageHeader();
-	processIfMatchHeader();
-	// processIfModifiedSinceHeader();
 	
 }
 
@@ -292,19 +290,26 @@ function authenticateUser($dbconn) {
 		// echo 'Text to send if user hits Cancel button<br>';
 		exit;
 	} else {
-		$stmt = $dbconn->prepare("SELECT user.userID, user.name, user.type, user_history.registration_date, user_history.last_activity
+		$stmt = $dbconn->prepare("SELECT user.userID, user.name, user.type, user.password,
+					user_history.registration_date, user_history.last_activity
 					FROM user JOIN user_history ON user.userID=user_history.userID_FK
-					WHERE email=:email AND password=:password");
+					WHERE email=:email");
 		$stmt->bindParam(':email', $_SERVER['PHP_AUTH_USER']);
-		$stmt->bindParam(':password', $_SERVER['PHP_AUTH_PW']);
 		$stmt->execute();
 		
 		if($stmt->rowCount() == 1) {
 			$result = $stmt->fetch();
 			$stmt->closeCursor();
-			$user =  new User($result['userID'], $result['name'], $_SERVER['PHP_AUTH_USER'],
-					$result['type'], $result['registration_date'], $result['last_activity']);
-			return $user;
+			
+			if(password_verify($_SERVER['PHP_AUTH_PW'], $result['password'])) {
+				$user =  new User($result['userID'], $result['name'], $_SERVER['PHP_AUTH_USER'],
+						$result['type'], $result['registration_date'], $result['last_activity']);
+				return $user;
+			} else {
+				header('HTTP/1.0 401 Unauthorized');
+				exit;
+			}
+			
 		} else { // No record found
 			header('HTTP/1.0 401 Unauthorized');
 			// header('WWW-Authenticate: Basic realm="Modintro"');
