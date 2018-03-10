@@ -278,7 +278,7 @@ function getLastModified($dbconn, $tableName) {
 }
 
 function authenticateUser($dbconn) {
-	$segments = @explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
+	$segments = @explode(':', base64_decode(substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6)));
 	
 	if(count($segments) == 2) {
 		list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = $segments;
