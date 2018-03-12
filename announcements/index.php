@@ -1,10 +1,10 @@
 <?php
 // /announcements/index.php
 
-require_once '../utilities/tools.php';
-require_once '../utilities/appSettings.php';
-require_once '../classes/User.php';
-require_once '../classes/Announcement.php';
+require_once '../../utilities/tools.php';
+require_once '../../utilities/appSettings.php';
+require_once '../../classes/User.php';
+require_once '../../classes/Announcement.php';
 
 // Check if Content-Type  and character set requested by
 // client are available
@@ -19,11 +19,12 @@ $requestURI = explode("?", $_SERVER['REQUEST_URI']);
 $requestURI = $requestURI[0];
 
 // Database connection files
-define("DB_CONFIG", "../utilities/config.ini");
-define("DB_SCRIPT_LOCATION", "../utilities/DBConnection.php");
+define("DB_CONFIG", "../../utilities/config.ini");
+// define("DB_SCRIPT_LOCATION", "../../utilities/DBConnection.php");
 
+header('X-Test: '.$_SERVER['REQUEST_URI']);
 
-if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
+if(preg_match('/^\/announcements\/$/', $requestURI)) {
 	/* URL:	/announcements/ */
 	
 	if($HTTPVerb === "DELETE") {
@@ -43,7 +44,7 @@ if(preg_match('/^\/workspace\/opal\/announcements\/$/', $requestURI)) {
 		header("Allow:  DELETE, GET, HEAD, OPTIONS, POST, PUT");
 		exit;
 	}
-} elseif(preg_match('/^\/workspace\/opal\/announcements\/[0-9]+$/', $requestURI)) {
+} elseif(preg_match('/^\/announcements\/[0-9]+$/', $requestURI)) {
 	/* URL:	/announcements/{announcementID}	*/
 	
 	$announcementId = end($params);
@@ -119,7 +120,8 @@ function deleteAnnouncements() {
 }
 
 function getAnnouncements($verb) {
-	$query = "SELECT * FROM announcement WHERE deleted=FALSE";
+	$query = "SELECT userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
+ 			FROM announcement WHERE deleted=FALSE";
 	
 	$sortBy = array("date", "headline");
 	if(isset($_GET['sort'])) {
@@ -155,9 +157,9 @@ function getAnnouncements($verb) {
 		}
 	}
 	
-	$dbconn = getDatabaseConnection();
+	$dbconn = getDatabaseConnection(DB_CONFIG);
 	$stmt = $dbconn->prepare($query);
-	if($stmt->execute()) {
+	if($stmt->execute()) { 
 		if($stmt->rowCount() == 0) {
 			header('HTTP/1.1 204 No Content');
 			exit;
@@ -355,7 +357,8 @@ function deleteAnnouncement($announcementId) {
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {
 		// First check record against headers
-		$stmt = $dbconn->prepare("SELECT * FROM announcement WHERE userID_FK=:userID AND announcementID=:announcementID");
+		$stmt = $dbconn->prepare("SELECT userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
+						FROM announcement WHERE userID_FK=:userID AND announcementID=:announcementID");
 		
 		if(($userType === "MASTER" || $userType === "ADMIN") && isset($_GET['userid'])) {
 			$stmt->bindParam(':userID', $_GET['userid']);
@@ -407,7 +410,8 @@ function deleteAnnouncement($announcementId) {
 }
 
 function getAnnouncement($verb, $announcementId) {	
-	$query = "SELECT * FROM announcement WHERE announcementID=:announcementID";
+	$query = "SELECT userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
+			FROM announcement WHERE announcementID=:announcementID";
 	
 	$dbconn = getDatabaseConnection();	
 	$stmt = $dbconn->prepare($query);
@@ -418,15 +422,15 @@ function getAnnouncement($verb, $announcementId) {
 			$result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 			$result = $result[0];
 			processConditionalHeaders($result['etag'], $rowCount, $result['last_modified']);
-		
+			
 			$output = json_encode($result);
 			
 			header('HTTP/1.1 200 OK');
 			header('Content-Type: application/json');
 			header('Content-Length: '.strlen($output));
 			header('Etag: '.$result['etag']);
-			header('Last-Modified: '.$result['last_modified']);
-
+			header('Last-Modified: '.$result['last_modified']); 
+			
 			if($verb === "GET") {
 				echo $output;
 			}
@@ -442,12 +446,7 @@ function getAnnouncement($verb, $announcementId) {
 	}
 }
 
-function putAnnouncement($announcementId) {
-	if(isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
-		header('HTTP/1.1 412 Precondition Failed');
-		exit;
-	}
-	
+function putAnnouncement($announcementId) {	
 	$putVar = json_decode(file_get_contents("php://input"), true);
 	if(isset($putVar) && array_key_exists('Headline', $putVar) && array_key_exists('Body', $putVar)
 			&& array_key_exists('Previous', $putVar) && array_key_exists('AllowComments', $putVar)

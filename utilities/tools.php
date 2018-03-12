@@ -1,11 +1,8 @@
 <?php
-require '../utilities/appSettings.php';
-require '../classes/AcceptMediaType.php';
-require '../classes/User.php';
-
-// Global header values
-// $etags = NULL;
-
+// require 'appSettings.php';
+require '../../classes/AcceptMediaType.php';
+require '../../classes/User.php';
+require '../../utilities/DBConnection.php';
 
 function processHeaders() {
 	processHostHeader();
@@ -139,11 +136,7 @@ function processLanguageHeader() {
 	}
 }
 
-/**
- * https://tools.ietf.org/html/rfc2616#section-14.24
- * @return array
- */
-function processIfMatchHeader() {
+function processIfMatchHeader() { 
 	// Process E-tags
 	if(isset($_SERVER['HTTP_IF_MATCH'])) {
 		$etags = array_map('trim', explode(',', $_SERVER['HTTP_IF_MATCH']));
@@ -152,74 +145,109 @@ function processIfMatchHeader() {
 	return NULL;
 }
 
-/**
- * https://tools.ietf.org/html/rfc2616#section-14.26
- */
 function processIfNoneMatchHeader() {
-	if(isset($_SERVER['HTTP_IF_NONE_MATCH'])) {
-		$etags = array_map('trim', explode(',', $_SERVER['HTTP_IF_NONE_MATCH']));
+	if(isset($_SERVER['HTTP_IF_NONE_MATCH'])) { 
+		$etags = array_map('clean', explode(',', $_SERVER['HTTP_IF_NONE_MATCH']));
 		return $etags;
 	}
 	return NULL;
 }
 
-/**
- * 
- * https://tools.ietf.org/html/rfc2616#section-14.25
- */
 function processIfModifiedSinceHeader() {
 	if(isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {			
 		return strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
 	}
 }
 
-/**
- * https://tools.ietf.org/html/rfc2616#section-14.28
- */
 function processIfUnmodifiedSinceHeader() {
 	if(isset($_SERVER['HTTP_IF_UNMODIFIED_SINCE'])) {
 		return strtotime($_SERVER['HTTP_IF_UNMODIFIED_SINCE']);
 	}
 }
 
-function processConditionalHeaders($etag, $rowCount, $lastModified) {
+/**
+ * Remove whitespace, newlines, and parentheses from
+ * the specified string.
+ */
+function clean($str) {
+	return trim($str, " \t\n\r\0\x0B\"");
+}
+
+
+/**
+ * The logic of the processConditionalHeaders method is explained in RFC 2616
+ * at the following urls:
+ *
+ * If-Match - https://tools.ietf.org/html/rfc2616#section-14.24
+ * If-None-Match -  https://tools.ietf.org/html/rfc2616#section-14.26
+ * If-Modified-Since - https://tools.ietf.org/html/rfc2616#section-14.25
+ * If-Unmodified-Since - https://tools.ietf.org/html/rfc2616#section-14.28
+ */
+
+function processConditionalHeaders($etag, $rowCount, $lastModified) { 
 	$ifModSin = processIfModifiedSinceHeader();
 	$ifUnmodSin = processIfUnmodifiedSinceHeader();
 	$ifMatch = processIfMatchHeader();
 	$ifNoneMatch = processIfNoneMatchHeader();
+
 	
-	if($ifMatch && !$ifNoneMatch && !$ifModSin) {		
-		if((in_array('*', $ifMatch) && ($rowCount == 0))) {
-			header('HTTP/1.1 412 Precondition Failed');
-			exit;			
-		}  elseif(!in_array($etag, $ifMatch)) {
-			header('HTTP/1.1 412 Precondition Failed');
-			exit;
+	
+	if($ifMatch && !$ifNoneMatch && !$ifModSin) {  
+		if(in_array('*', $ifMatch)) {
+			if($rowCount == 0) { 
+				pcf($etag, $lastModified);
+			} 
+		}  elseif(!in_array($etag, $ifMatch)) { 
+			pcf($etag, $lastModified);
 		}
 	} elseif($ifNoneMatch && !$ifMatch && !$ifUnmodSin) {
-		if(in_array($etag, $ifNoneMatch) || in_array("*", $ifNoneMatch)) {
-			if($ifModSin > strtotime($lastModified)) {
-				header('HTTP/1.1 304 Not Modified');
-				header('Etag: '.$etag);
-				header('Last-Modified: '.$lastModified);
-				exit;
+		if(in_array($etag, $ifNoneMatch)) { 
+			if(isset($ifModSin)) {
+				if($ifModSin > strtotime($lastModified)) {
+					if($_SERVER['REQUEST_METHOD'] === "GET" ||  $_SERVER['REQUEST_METHOD'] === "HEAD") {
+						nm($etag, $lastModified);
+					} else {
+						pcf($etag, $lastModified);
+					}
+				} 
+			} else {
+				if($_SERVER['REQUEST_METHOD'] === "GET" ||  $_SERVER['REQUEST_METHOD'] === "HEAD") {
+					nm($etag, $lastModified);
+				} else {
+					pcf($etag, $lastModified);
+				}
 			}
-		}
-	} elseif($ifModSin && !$ifMatch && !$ifUnmodSin) {
-		if($ifModSin > strtotime($lastModified)) {
-			header('HTTP/1.1 304 Not Modified');
-			header('Etag: '.$etag);
-			header('Last-Modified: '.$lastModified);
-			exit;
+		} elseif(in_array("*", $ifNoneMatch) && $rowCount != 0) {
+			if($_SERVER['REQUEST_METHOD'] === "GET" ||  $_SERVER['REQUEST_METHOD'] === "HEAD") {
+				nm($etag, $lastModified);
+			} else {
+				pcf($etag, $lastModified);
+			}
+		}		
+	} elseif($ifModSin && !$ifMatch && !$ifUnmodSin) { 
+		if($ifModSin > strtotime($lastModified)) { 
+			nm($etag, $lastModified);
 		}
 	} elseif($ifUnmodSin && !$ifNoneMatch && !$ifModSin) {
 		if($ifUnmodSin < strtotime($lastModified)) {
-			header('HTTP/1.1 412 Precondition Failed');
-			header('Etag: '.$etag);
-			header('Last-Modified: '.$lastModified);
-			exit;
+			pcf($etag, $lastModified);
 		}
 	}
+}
+
+// 304 Not Modified Response Header
+function nm($etag, $lastModified) { 
+	header('HTTP/1.1 304 Not Modified');
+	header('Etag: '.$etag);
+	exit;
+}
+
+// 412 Prondition Failed Response Header
+function pcf($etag, $lastModified) {
+	header('HTTP/1.1 412 Precondition Failed');
+	header('Etag: '.$etag);
+	header('Last-Modified: '.$lastModified);
+	exit;	
 }
 
 /**
@@ -254,13 +282,14 @@ function compareEtags($tag1, $tag2) {
 
 
 function getDatabaseConnection() {
-	include(DB_SCRIPT_LOCATION);
-	
+	/* include(DB_SCRIPT_LOCATION);  FROM DEVELOPMENT */
+
 	try {
-		$db = new DBConnection(DB_CONFIG);
+		$db = new DBConnection();
 		$conn = $db->getConnection();
 		return $conn;
 	} catch(PDOException $e) {
+		echo $e->getMessage();
 		header('HTTP/1.1 500 Internal Server Error');
 		exit;
 	}
@@ -279,7 +308,7 @@ function getLastModified($dbconn, $tableName) {
 
 function authenticateUser($dbconn) {
 	$segments = @explode(':', base64_decode(substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6)));
-	
+
 	if(count($segments) == 2) {
 		list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = $segments;
 	}
@@ -300,16 +329,15 @@ function authenticateUser($dbconn) {
 		if($stmt->rowCount() == 1) {
 			$result = $stmt->fetch();
 			$stmt->closeCursor();
-			
-			if(password_verify($_SERVER['PHP_AUTH_PW'], $result['password'])) {
+
+			if(password_verify( $_SERVER['PHP_AUTH_PW'], $result['password'])) {
 				$user =  new User($result['userID'], $result['name'], $_SERVER['PHP_AUTH_USER'],
-						$result['type'], $result['registration_date'], $result['last_activity']);
+					$result['type'], $result['registration_date'], $result['last_activity']);
 				return $user;
 			} else {
-				header('HTTP/1.0 401 Unauthorized');
+				header('HTTP/1.1 401 Unauthorized');
 				exit;
 			}
-			
 		} else { // No record found
 			header('HTTP/1.0 401 Unauthorized');
 			// header('WWW-Authenticate: Basic realm="Modintro"');
