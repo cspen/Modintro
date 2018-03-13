@@ -22,8 +22,6 @@ $requestURI = $requestURI[0];
 define("DB_CONFIG", "../../utilities/config.ini");
 // define("DB_SCRIPT_LOCATION", "../../utilities/DBConnection.php");
 
-header('X-Test: '.$_SERVER['REQUEST_URI']);
-
 if(preg_match('/^\/announcements\/$/', $requestURI)) {
 	/* URL:	/announcements/ */
 	
@@ -75,7 +73,7 @@ function deleteAnnouncements() {
 	$user = authenticateUser($dbconn);
 	
 	if($user->getType() === "MASTER") {
-		$query = "DELETE FROM announcement";
+		$query = "ALTER TABLE announcement AUTO_INCREMENT = 1; DELETE FROM announcement";
 		$fromFlag = $toFlag = FALSE;
 		if(isset($_GET['from'])) {
 			if(!is_numeric($_GET['from'])) {
@@ -105,7 +103,7 @@ function deleteAnnouncements() {
 		if($toFlag) {
 			$stmt->bindParam(':toID', $_GET['to']);
 		}
-		echo $query."\n\n";
+		
 		if($stmt->execute()) {
 			header('HTTP/1.1 204 No Content');
 			exit;
@@ -120,7 +118,7 @@ function deleteAnnouncements() {
 }
 
 function getAnnouncements($verb) {
-	$query = "SELECT userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
+	$query = "SELECT announcementID, userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
  			FROM announcement WHERE deleted=FALSE";
 	
 	$sortBy = array("date", "headline");
@@ -239,7 +237,8 @@ function postAnnouncement() {
 			
 			if($stmt->execute()) {
 				$i = $dbconn->lastInsertId();
-				$location = $_SERVER['REQUEST_URI'].$i;
+				$location = "http://".$_SERVER[HTTP_HOST].$_SERVER['REQUEST_URI'].$i;
+				header('HTTP/1.1 201 Created');
 				header('Content-Location: '.$location);
 				echo $location;
 			} else {
@@ -268,7 +267,7 @@ function putAnnouncements() {
 				exit;
 			}
 			
-			$sql = 'INSERT INTO announcement (userID_FK, date, headline, body,
+			$sql = 'ALTER TABLE announcement AUTO_INCREMENT = 1; INSERT INTO announcement (userID_FK, date, headline, body,
 					 previous, allow_comments, deleted) VALUES ';
 			$count = count($announcements);
 			for($i = 0; $i < $count; $i++) {
@@ -410,7 +409,7 @@ function deleteAnnouncement($announcementId) {
 }
 
 function getAnnouncement($verb, $announcementId) {	
-	$query = "SELECT userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
+	$query = "SELECT announcementID, userID_FK, DATE_FORMAT(last_modified, \"%a, %d %b %Y %T GMT\") AS last_modified, date, headline, body, previous, allow_comments, deleted, etag
 			FROM announcement WHERE announcementID=:announcementID";
 	
 	$dbconn = getDatabaseConnection();	
