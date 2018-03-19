@@ -1,5 +1,5 @@
 <?php
-// /announcements/index.php
+/* /announcements/index.php */
 
 require_once '../../utilities/tools.php';
 require_once '../../utilities/appSettings.php';
@@ -17,10 +17,6 @@ $HTTPVerb = $_SERVER['REQUEST_METHOD'];
 // Separate URL from query string
 $requestURI = explode("?", $_SERVER['REQUEST_URI']);
 $requestURI = $requestURI[0];
-
-// Database connection files
-define("DB_CONFIG", "../../utilities/config.ini");
-// define("DB_SCRIPT_LOCATION", "../../utilities/DBConnection.php");
 
 if(preg_match('/^\/announcements\/$/', $requestURI)) {
 	/* URL:	/announcements/ */
@@ -155,7 +151,7 @@ function getAnnouncements($verb) {
 		}
 	}
 	
-	$dbconn = getDatabaseConnection(DB_CONFIG);
+	$dbconn = getDatabaseConnection();
 	$stmt = $dbconn->prepare($query);
 	if($stmt->execute()) { 
 		if($stmt->rowCount() == 0) {
