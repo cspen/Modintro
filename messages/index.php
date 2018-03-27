@@ -17,11 +17,6 @@ $HTTPVerb = $_SERVER['REQUEST_METHOD'];
 $requestURI = explode("?", $_SERVER['REQUEST_URI']);
 $requestURI = $requestURI[0];
 
-// Database connection files
-define("DB_CONFIG", "../utilities/config.ini");
-define("DB_SCRIPT_LOCATION", "../utilities/DBConnection.php");
-
-
 if(preg_match('/^\/workspace\/opal\/messages\/$/', $requestURI)) {
 	/* URL:	/messages/ */
 	
