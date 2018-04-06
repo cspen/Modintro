@@ -1,11 +1,11 @@
 <?php
 // /messages/index.php
 
-require_once '../utilities/tools.php';
-require_once '../utilities/appSettings.php';
-require_once '../classes/User.php';
+require_once '../../utilities/tools.php';
+require_once '../../utilities/appSettings.php';
+require_once '../../classes/User.php';
 
-// Check if Content-Type  and character set requested by
+// Check if Content-Type and character set requested by
 // client are available
 processHeaders();
 
@@ -17,7 +17,7 @@ $HTTPVerb = $_SERVER['REQUEST_METHOD'];
 $requestURI = explode("?", $_SERVER['REQUEST_URI']);
 $requestURI = $requestURI[0];
 
-if(preg_match('/^\/workspace\/opal\/messages\/$/', $requestURI)) {
+if(preg_match('/\/messages\/$/', $requestURI)) { 
 	/* URL:	/messages/ */
 	
 	if($HTTPVerb === "DELETE") {
@@ -28,7 +28,7 @@ if(preg_match('/^\/workspace\/opal\/messages\/$/', $requestURI)) {
 		header("HTTP/1.1 200 OK");
 		header("Allow: DELETE, GET, HEAD, PUT");
 		exit;
-	} elseif($HTTPVerb === "POST") {
+	} elseif($HTTPVerb === "POST") { 
 		postMessage();
 	} elseif($HTTPVerb === "PUT") {
 		putMessages();
@@ -37,7 +37,7 @@ if(preg_match('/^\/workspace\/opal\/messages\/$/', $requestURI)) {
 		header("Allow:  DELETE, GET, HEAD, OPTIONS, POST, PUT");
 		exit;
 	}	
-} elseif(preg_match('/^\/workspace\/opal\/messages\/[0-9]+$/', $requestURI)) {
+} elseif(preg_match('/^\/messages\/[0-9]+$/', $requestURI)) {
 	/* URL:	/messages/{messageID}	*/
 	
 	$messageId = end($params);
@@ -184,14 +184,14 @@ function getMessages($verb) {
 	}
 }
 
-function postMessage() {
+function postMessage() { 
 	$dbconn = getDatabaseConnection();
 	$user = authenticateUser($dbconn);
 	
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {
 		if(!empty($_POST)) {
-			if(isset($_POST['title']) &&	isset($_POST['body']) && isset($_POST['toUser'])) {
+			if(isset($_POST['title']) &&	isset($_POST['body']) && isset($_POST['toUser'])) { 
 				$title = $_POST['title'];
 				$body = $_POST['body'];
 				$toUser = $_POST['toUser'];
