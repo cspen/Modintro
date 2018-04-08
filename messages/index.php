@@ -4,6 +4,7 @@
 require_once '../../utilities/tools.php';
 require_once '../../utilities/appSettings.php';
 require_once '../../classes/User.php';
+require_once '../../classes/Message.php';
 
 // Check if Content-Type and character set requested by
 // client are available
@@ -22,7 +23,7 @@ if(preg_match('/\/messages\/$/', $requestURI)) {
 	
 	if($HTTPVerb === "DELETE") {
 		deleteMessage();
-	} elseif($HTTPVerb === "GET" || $HTTPVerb === "HEAD") {
+	} elseif($HTTPVerb === "GET" || $HTTPVerb === "HEAD") { 
 		getMessages($HTTPVerb);
 	} elseif($HTTPVerb === "OPTIONS") {
 		header("HTTP/1.1 200 OK");
@@ -191,10 +192,10 @@ function postMessage() {
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {
 		if(!empty($_POST)) {
-			if(isset($_POST['title']) &&	isset($_POST['body']) && isset($_POST['toUser'])) { 
+			if(isset($_POST['title']) &&	isset($_POST['body']) && isset($_POST['to'])) { 
 				$title = $_POST['title'];
 				$body = $_POST['body'];
-				$toUser = $_POST['toUser'];
+				$toUser = $_POST['to'];
 			} else {
 				header('HTTP/1.1 400 Bad Request');
 				exit;
