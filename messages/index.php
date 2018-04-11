@@ -323,13 +323,13 @@ function deleteMessage($messageId) {
 	}
 }
 
-function getMessage($verb, $messageId) {
+function getMessage($verb, $messageId) { 
 	$dbconn = getDatabaseConnection();
 	$user = authenticateUser($dbconn);
 	
 	$userType = $user->getType();
 	if($userType === "MASTER" || $userType === "ADMIN" || $userType === "USER") {	
-		$stmt = $dbconn->prepare("SELECT * FROM message WHERE messageID=:messageID AND to_FK=:userID");
+		$stmt = $dbconn->prepare("SELECT * FROM message WHERE messageID=:messageID AND to_userID_FK=:userID");
 		$stmt->bindParam(':messageID', $messageId);
 		$stmt->bindParam(':userID', $user->getId());
 		
