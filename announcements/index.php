@@ -4,7 +4,6 @@
 require_once '../../utilities/tools.php';
 require_once '../../utilities/appSettings.php';
 require_once '../../classes/User.php';
-require_once '../../classes/Announcement.php';
 
 // Check if Content-Type  and character set requested by
 // client are available
@@ -168,10 +167,18 @@ function getAnnouncements($verb) {
 		$results = $stmt->fetchAll(PDO::FETCH_ASSOC);		
 		$aList = array();
 		foreach($results as $row) {
-			$announcement = new Announcement($row['announcementID'], $row['userID_FK'], $row['date'],
-					$row['headline'], $row['body'], $row['previous'], $row['allow_comments'],
-					$row['deleted'], $row['etag'], $row['last_modified']);
-			$aList[] = $announcement->toArray();
+			$announcement = array();
+			$announcement[] = $row['announcementID'];
+			$announcement[] = $row['userID_FK'];
+			$announcement[] = $row['date'];
+			$announcement[] = $row['headline'];
+			$announcement[] = $row['body'];
+			$announcement[] = $row['previous'];
+			$announcement[] = $row['allow_comments'];
+			$announcement[] = $row['deleted'];
+			$announcement[] = $row['etag'];
+			$announcement[] = $row['last_modified'];
+			$aList[] = $announcement;
 		}
 		$aList = Array( "Announcements" => $aList);
 		$output = json_encode($aList);
