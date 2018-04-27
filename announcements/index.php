@@ -20,44 +20,50 @@ $requestURI = $requestURI[0];
 
 if(preg_match('/^\/announcements\/$/', $requestURI)) {
 	/* URL:	/announcements/ */
-	
-	if($HTTPVerb === "DELETE") {
-		deleteAnnouncements();
-	} elseif($HTTPVerb === "GET" || $HTTPVerb === "HEAD") {
-		getAnnouncements($HTTPVerb);
-	} elseif($HTTPVerb === "OPTIONS") {
-		header("HTTP/1.1 200 OK");
-		header("Allow: DELETE, GET, HEAD, POST, PUT");
-		exit;
-	} elseif($HTTPVerb === "POST") {
-		postAnnouncement();
-	} elseif($HTTPVerb === "PUT") {
-		putAnnouncements();
-	} else {
-		header("HTTP/1.1 405 Method Not Allowed");
-		header("Allow:  DELETE, GET, HEAD, OPTIONS, POST, PUT");
-		exit;
+
+	switch($_SERVER['REQUEST_METHOD']) {
+		case "DELETE":
+			deleteAnnouncements();
+		case "GET":
+		case "HEAD":
+			getAnnouncements($HTTPVerb);
+		case "OPTIONS":
+			header("HTTP/1.1 200 OK");
+			header("Allow: DELETE, GET, HEAD, POST, PUT");
+			exit;
+		case "POST":
+			postAnnouncement();
+		case "PUT":
+			putAnnouncements();
+		default:
+			header("HTTP/1.1 405 Method Not Allowed");
+			header("Allow:  DELETE, GET, HEAD, OPTIONS, POST, PUT");
+			exit;
 	}
+
 } elseif(preg_match('/^\/announcements\/[0-9]+$/', $requestURI)) {
 	/* URL:	/announcements/{announcementID}	*/
 	
 	$announcementId = end($params);
-	
-	if($HTTPVerb === "DELETE") {
-		deleteAnnouncement($announcementId);
-	} elseif($HTTPVerb === "GET" || $HTTPVerb === "HEAD") {
-		getAnnouncement($HTTPVerb, $announcementId);
-	} elseif($HTTPVerb === "OPTIONS") {
-		header("HTTP/1.1 200 OK");
-		header("Allow: DELETE, GET, HEAD, PUT");
-		exit;
-	} elseif($HTTPVerb === "PUT") {
-		putAnnouncement($announcementId);
-	} else {
-		header("HTTP/1.1 405 Method Not Allowed");
-		header("Allow:  DELETE, GET, HEAD, OPTIONS, PUT");
-		exit;
+
+	switch($_SERVER['REQUEST_METHOD']) {
+		case "DELETE":
+			deleteAnnouncement($announcementId);
+		case "GET":
+		case "HEAD":
+			getAnnouncement($HTTPVerb, $announcementId);
+		case "OPTIONS":
+			header("HTTP/1.1 200 OK");
+			header("Allow: DELETE, GET, HEAD, PUT");
+			exit;
+		case "PUT":
+			putAnnouncement($announcementId);
+		default:
+			header("HTTP/1.1 405 Method Not Allowed");
+			header("Allow:  DELETE, GET, HEAD, OPTIONS, PUT");
+			exit;
 	}
+
 } else {
 	header('HTTP/1.1 404 Not Found');
 	exit;
