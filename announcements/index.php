@@ -476,12 +476,14 @@ function putAnnouncement($announcementId) {
 			$rowCount = $stmt->rowCount();
 			$stmt->closeCursor();			
 			
+			$existed = false;
 			if($rowCount == 1) { // Update (replace) existing resource				
 				processConditionalHeaders($results['etag'], $stmt->rowCount(), $results['last_modified']);
 				
 				$stmt = $dbconn->prepare("UPDATE announcement SET date=NOW(), headline=:headline, body=:body,
 								previous=:previous, allow_comments=:allowComments, userID_FK=:userID, deleted=:deleted
-								WHERE announcementID=:announcementID");					
+								WHERE announcementID=:announcementID");	
+				$existed = true;				
 			} else { // Create a new resource
 				processConditionalHeaders(null, 0, null);
 				
@@ -500,7 +502,11 @@ function putAnnouncement($announcementId) {
 			$stmt->bindParam(':deleted', $putVar['Deleted']);
 			
 			if($stmt->execute()) {
-				header('HTTP/1.1 204 No Content');
+				if($existed) {
+					header('HTTP/1.1 204 No Content');
+				} else {
+					header('HTTP/1.1 201 Created');
+				}
 				exit;
 			} else {
 				header('HTTP/1.1 504 Internal Server Error');
