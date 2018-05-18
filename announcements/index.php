@@ -165,22 +165,7 @@ function getAnnouncements($verb) {
 		}
 		
 		$results = $stmt->fetchAll(PDO::FETCH_ASSOC);		
-		$aList = array();
-		foreach($results as $row) {
-			$announcement = array();
-			$announcement[] = $row['announcementID'];
-			$announcement[] = $row['userID_FK'];
-			$announcement[] = $row['date'];
-			$announcement[] = $row['headline'];
-			$announcement[] = $row['body'];
-			$announcement[] = $row['previous'];
-			$announcement[] = $row['allow_comments'];
-			$announcement[] = $row['deleted'];
-			$announcement[] = $row['etag'];
-			$announcement[] = $row['last_modified'];
-			$aList[] = $announcement;
-		}
-		$aList = Array( "Announcements" => $aList);
+		$aList = Array( "Announcements" => $results);
 		$output = json_encode($aList);
 		
 		// Set headers
