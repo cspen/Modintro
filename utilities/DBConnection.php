@@ -31,10 +31,10 @@ class DBConnection {
 	}
 
 	// DB credentials
-	private 	$username = 'dbo727481365';
-	private		$password = 'J1llyB3an!';
-	private		$dbname = 'db727481365';
-	private		$servername = 'db727481365.db.1and1.com';
+	private 	$username = 'username';
+	private		$password = 'password';
+	private		$dbname = 'dbName';
+	private		$servername = 'servername';
 	
 	// DB connection
 	private		$connection;
